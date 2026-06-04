@@ -1,0 +1,15 @@
+python-telegram-bot>=21.10
+pandas>=2.2.0
+openpyxl>=3.1.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+requests>=2.31.0
+yfinance>=0.2.0
+
+# Dev / tests
+pytest>=8.0.0
+
+# Broker screenshot extraction (Phase 2)
+google-genai>=1.0.0
