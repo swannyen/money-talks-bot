@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from src.config import Settings
+from src.config import ACCEPTED_ACTIONS, Settings
 
 
 def portfolio_example(portfolios: list[str], index: int = 0) -> str:
@@ -15,19 +12,37 @@ def portfolio_example(portfolios: list[str], index: int = 0) -> str:
     return "<Portfolio>"
 
 
-def _manual_entry_line(portfolios: list[str]) -> str:
+def portfolio_edit_hints(portfolios: list[str]) -> list[str]:
+    if not portfolios:
+        return ["• `edit portfolio <Portfolio>`"]
+    return [f"• `edit portfolio {name}`" for name in portfolios]
+
+
+def manual_example_line(portfolios: list[str], *, action: str = "BUY") -> str:
     portfolio = portfolio_example(portfolios, 0)
-    return (
-        f"date 2026-06-04 | portfolio {portfolio} | action BUY | "
-        f"ticker AAPL | currency USD | quantity 10 | value 1850"
-    )
+    examples = {
+        "BUY": (
+            f"date 2026-06-04 | portfolio {portfolio} | action BUY | "
+            f"ticker AAPL | currency USD | quantity 10 | value 1850"
+        ),
+        "SELL": (
+            f"date 2026-06-04 | portfolio {portfolio} | action SELL | "
+            f"ticker AAPL | currency USD | quantity 5 | value 920"
+        ),
+        "DIVIDEND": (
+            f"date 2026-06-01 | portfolio {portfolio} | action DIVIDEND | "
+            f"ticker V | currency USD | quantity 3 | value 1.41"
+        ),
+        "FEE": (
+            f"date 2026-06-01 | portfolio {portfolio} | action FEE | "
+            f"ticker V | currency USD | value 0.60"
+        ),
+    }
+    return examples.get(action, examples["BUY"])
 
 
 def _portfolio_edit_examples(portfolios: list[str]) -> str:
-    if not portfolios:
-        return "• `edit portfolio <Portfolio>`"
-    lines = [f"• `edit portfolio {name}`" for name in portfolios]
-    return "\n".join(lines)
+    return "\n".join(portfolio_edit_hints(portfolios))
 
 
 def _config_footer(settings: Settings) -> str:
@@ -53,7 +68,8 @@ Add investment transactions to your Supabase database (same table as the Money T
 *Send*
 • *Photo* — broker screenshot (dividend/trade history)
 • *File* — CSV or Excel (broker dividend export or Money Talks export)
-• *Text* — manual entry (see `/add` or `/help`)
+• */add* — step-by-step guided entry (buttons)
+• *One-line text* — manual entry (see `/help`)
 
 *Then*
 1. Review the parsed draft (edit anything wrong).
@@ -62,7 +78,7 @@ Add investment transactions to your Supabase database (same table as the Money T
 
 *Commands*
 /help — full guide
-/add — manual entry format
+/add — guided add (buttons)
 /recent — last 10 saved rows (with ids)
 /delete 432 — delete by id (see /recent)
 /undo — delete last row saved this session
@@ -73,11 +89,9 @@ Add investment transactions to your Supabase database (same table as the Money T
 def build_help_message(settings: Settings) -> str:
     portfolio = portfolio_example(settings.portfolios, 0)
     portfolio_alt = (
-        portfolio_example(settings.portfolios, 1)
-        if len(settings.portfolios) > 1
-        else portfolio
+        portfolio_example(settings.portfolios, 1) if len(settings.portfolios) > 1 else portfolio
     )
-    manual_line = _manual_entry_line(settings.portfolios)
+    manual_line = manual_example_line(settings.portfolios)
     edit_portfolio_lines = _portfolio_edit_examples(settings.portfolios)
 
     return f"""\
@@ -85,7 +99,7 @@ def build_help_message(settings: Settings) -> str:
 
 /start — welcome & quick overview
 /help — this guide
-/add — manual entry template
+/add — guided add (buttons)
 /recent — last 10 transactions (shows database ids)
 /delete 432 — delete one row (get id from /recent)
 /undo — delete the last row *you saved in this bot session*
@@ -119,17 +133,19 @@ Multiple rows are queued one at a time — confirm each before the next.
 
 ---
 
-*3. Manual text entry*
+*3. Guided add (`/add`)*
 
-One message with field pairs (`|` or spaces between fields):
+Send `/add` — the bot asks what you're adding and walks you through with *buttons* (BUY, SELL, DIVIDEND, FEE, DEPOSIT → portfolio → date → …).
+
+Type only when prompted (ticker, quantity, amount). Reply `confirm` at the end to save.
+
+*One-line manual* (alternative): field pairs in one message:
 
 ```
 {manual_line}
 ```
 
 Colon format also works: `date: 2026-06-04 | portfolio: {portfolio} | ...`
-
-This becomes the active draft immediately.
 
 ---
 
@@ -174,30 +190,11 @@ Only Telegram user ids listed in `ALLOWED_TELEGRAM_USER_IDS` can use this bot.
 """
 
 
-def build_add_message(settings: Settings) -> str:
-    manual_line = _manual_entry_line(settings.portfolios)
-    return f"""\
-*Manual entry*
-
-Send one message like:
-
-```
-{manual_line}
-```
-
-Supported fields: `date`, `portfolio`, `action`, `ticker`, `currency`, `quantity`, `value`
-
-Actions: `BUY`, `SELL`, `DIVIDEND`, `DEPOSIT`, `FEE`
-
-Then review the draft and reply `confirm`.
-"""
-
-
 def manual_parse_error(portfolios: list[str]) -> str:
-    portfolio = portfolio_example(portfolios, 0)
+    example = manual_example_line(portfolios, action="SELL")
     return (
-        f"Could not parse fields. Use: "
-        f"`date 2026-06-04 | portfolio {portfolio} | action BUY | ...`"
+        f"Could not parse fields. Example:\n`{example}`\n"
+        f"Actions: {', '.join(ACCEPTED_ACTIONS)}. See `/help` for more."
     )
 
 
@@ -208,7 +205,4 @@ def edit_portfolio_hint(portfolios: list[str]) -> str:
 
 def unknown_edit_format_hint(portfolios: list[str]) -> str:
     portfolio = portfolio_example(portfolios, 0)
-    return (
-        f"Unknown edit format. Example: `edit value 1.41` or "
-        f"`edit portfolio {portfolio}`"
-    )
+    return f"Unknown edit format. Example: `edit value 1.41` or " f"`edit portfolio {portfolio}`"

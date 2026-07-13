@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from src.guided_add import GuidedAddState
 from src.models import PendingTransaction
 
 
@@ -12,6 +13,7 @@ class UserSession:
         self.pending: list[PendingTransaction] = []
         self.active_pending_id: Optional[str] = None
         self.last_inserted_id: Optional[int] = None
+        self.guided_add: Optional[GuidedAddState] = None
 
     def add_pending(self, item: PendingTransaction, *, make_active: bool = False) -> None:
         if make_active:

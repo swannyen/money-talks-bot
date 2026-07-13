@@ -95,17 +95,3 @@ def extract_transactions_from_image(
     if not drafts:
         raise VisionParserError("No transactions found in screenshot")
     return drafts
-
-
-def extract_transaction_from_image(
-    image_bytes: bytes,
-    *,
-    mime_type: str = "image/jpeg",
-    api_key: Optional[str] = None,
-    model: Optional[str] = None,
-) -> ExtractedTransaction:
-    """Return first draft only (backward compatible)."""
-    drafts = extract_transactions_from_image(
-        image_bytes, mime_type=mime_type, api_key=api_key, model=model
-    )
-    return drafts[0]

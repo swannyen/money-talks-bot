@@ -16,21 +16,6 @@ from src.services.transaction_builder import enrich_draft_for_insert
 
 logger = logging.getLogger(__name__)
 
-APP_COLUMNS = [
-    "Date",
-    "Portfolio",
-    "Ticker",
-    "Asset Name",
-    "Asset Class",
-    "Currency",
-    "Action",
-    "Quantity",
-    "Value",
-    "Value (base)",
-    "Price per Unit",
-    "Year",
-]
-
 
 def _normalize_database_url(url: str) -> str:
     if url.startswith("postgres://"):

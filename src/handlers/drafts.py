@@ -3,9 +3,10 @@
 import logging
 
 from sqlalchemy.exc import SQLAlchemyError
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 
 from src.bot_state import database, sessions
+from src.guided_add import confirm_reject_button_rows
 from src.services.database import draft_to_db_row
 from src.services.draft_enrichment import enrich_draft
 from src.services.duplicate_checker import check_duplicates, format_duplicate_warning
@@ -13,6 +14,15 @@ from src.formatting import format_transaction_summary
 from src.models import ExtractedTransaction, PendingTransaction
 
 logger = logging.getLogger(__name__)
+
+
+def _confirm_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(label, callback_data=data) for label, data in row]
+            for row in confirm_reject_button_rows()
+        ]
+    )
 
 
 def queue_draft(
@@ -38,6 +48,36 @@ async def send_active_draft(update: Update, *, duplicate_note: str = "") -> None
     if duplicate_note:
         text = duplicate_note + "\n\n" + text
     await update.effective_message.reply_text(text, parse_mode="Markdown")
+
+
+async def send_active_draft_for_review(update: Update) -> None:
+    """Show enriched active draft with confirm/reject buttons."""
+    session = sessions.for_chat(update.effective_chat.id)
+    active = session.get_active()
+    if not active:
+        return
+    active.draft = enrich_draft(active.draft, database)
+    text = (
+        "Review your transaction — tap *Confirm* or type `confirm`:\n\n"
+        + format_transaction_summary(active.draft)
+    )
+    await update.effective_message.reply_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=_confirm_markup(),
+    )
+
+
+def discard_active_draft(chat_id: int) -> None:
+    active = sessions.for_chat(chat_id).get_active()
+    if active:
+        sessions.for_chat(chat_id).remove_pending(active.id)
+
+
+async def discard_active_draft_message(update: Update) -> None:
+    discard_active_draft(update.effective_chat.id)
+    await update.effective_message.reply_text("Discarded.")
+    await send_active_draft(update)
 
 
 async def save_confirmed(

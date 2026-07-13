@@ -3,15 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from src.config import Settings, get_settings
+from src.messages import portfolio_edit_hints
 from src.models import ExtractedTransaction, PendingTransaction
 
 HintBuilder = Callable[[ExtractedTransaction, Settings], list[str]]
 
 
 def _hint_portfolio(_draft: ExtractedTransaction, settings: Settings) -> list[str]:
-    if settings.portfolios:
-        return [f"• `edit portfolio {name}`" for name in settings.portfolios]
-    return ["• `edit portfolio <Portfolio>`"]
+    return portfolio_edit_hints(settings.portfolios)
 
 
 def _hint_currency(_draft: ExtractedTransaction, settings: Settings) -> list[str]:
@@ -53,11 +52,7 @@ def _optional_value_hint(draft: ExtractedTransaction, _settings: Settings) -> li
 def _optional_portfolio_hints(draft: ExtractedTransaction, settings: Settings) -> list[str]:
     if not draft.portfolio or "portfolio" in draft.missing_fields:
         return []
-    return [
-        f"• `edit portfolio {name}`"
-        for name in settings.portfolios
-        if name != draft.portfolio
-    ]
+    return [f"• `edit portfolio {name}`" for name in settings.portfolios if name != draft.portfolio]
 
 
 def _optional_ticker_hint(draft: ExtractedTransaction, _settings: Settings) -> list[str]:

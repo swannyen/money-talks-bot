@@ -8,7 +8,13 @@ from src.config import get_settings
 from src.edit_commands import apply_edit
 from src.handlers.auth import reject_unauthorized
 from src.handlers.delete_transaction import delete_transaction_by_id, parse_delete_id
-from src.handlers.drafts import queue_draft, save_confirmed, send_active_draft
+from src.handlers.drafts import (
+    discard_active_draft_message,
+    queue_draft,
+    save_confirmed,
+    send_active_draft,
+)
+from src.handlers.guided_add import handle_guided_text
 from src.messages import edit_portfolio_hint, unknown_edit_format_hint
 from src.parsers.manual import parse_manual_line
 from src.services.draft_enrichment import enrich_draft
@@ -29,6 +35,19 @@ async def handle_text(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> No
         await delete_transaction_by_id(update, delete_id)
         return
 
+    if await handle_guided_text(update, text):
+        return
+
+    guided = sessions.for_chat(chat_id).guided_add
+    if guided is not None and guided.awaiting_text is None:
+        handled = await _dispatch_text_command(update, lower, text, chat_id, active)
+        if handled:
+            return
+        await update.effective_message.reply_text(
+            "Use the buttons from /add, or send /add to start over."
+        )
+        return
+
     handled = await _dispatch_text_command(update, lower, text, chat_id, active)
     if handled:
         return
@@ -43,17 +62,13 @@ async def handle_text(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     await update.effective_message.reply_text(
-        "Send a screenshot (photo), CSV/Excel file, use /help, or /add for manual format."
+        "Send a screenshot (photo), CSV/Excel file, use /help, or /add to add a transaction."
     )
 
 
 async def _dispatch_text_command(update, lower: str, text: str, chat_id: int, active) -> bool:
     if lower == "reject":
-        if active:
-            session = sessions.for_chat(chat_id)
-            session.remove_pending(active.id)
-        await update.effective_message.reply_text("Discarded.")
-        await send_active_draft(update)
+        await discard_active_draft_message(update)
         return True
 
     if lower in {"confirm", "yes"}:

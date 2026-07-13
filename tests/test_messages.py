@@ -1,8 +1,8 @@
 from src.config import Settings
 from src.messages import (
-    build_add_message,
     build_help_message,
     build_start_message,
+    manual_example_line,
     portfolio_example,
 )
 
@@ -46,7 +46,14 @@ def test_help_message_uses_placeholder_when_no_portfolios():
     assert "Portfolios: not set" in text
 
 
-def test_start_and_add_messages_use_configured_portfolio():
+def test_start_message_uses_configured_portfolio():
     settings = _settings(portfolios=["MyBroker"])
     assert "edit portfolio MyBroker" in build_start_message(settings)
-    assert "portfolio MyBroker" in build_add_message(settings)
+    assert "/add" in build_start_message(settings)
+    assert "guided" in build_start_message(settings).lower()
+
+
+def test_manual_example_line_uses_configured_portfolio():
+    line = manual_example_line(["MyBroker"], action="BUY")
+    assert "portfolio MyBroker" in line
+    assert "action BUY" in line
