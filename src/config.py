@@ -10,6 +10,8 @@ load_dotenv(_PROJECT_ROOT / ".env")
 DEFAULT_PORTFOLIOS = ["Tiger", "MooMoo", "Vickers"]
 DEFAULT_CURRENCIES = ["SGD", "USD", "HKD", "EUR", "JPY"]
 DEFAULT_BASE_CURRENCY = "SGD"
+DEFAULT_REMINDER_TIMEZONE = "Asia/Singapore"
+DEFAULT_REMINDER_STORE_PATH = _PROJECT_ROOT / "data" / "reminders.json"
 ACCEPTED_ACTIONS = ("FEE", "BUY", "SELL", "DIVIDEND", "DEPOSIT")
 
 
@@ -51,6 +53,11 @@ def get_settings() -> "Settings":
             "ALLOWED_TELEGRAM_USER_IDS is not set (comma-separated Telegram user IDs)"
         )
 
+    reminder_path_raw = os.getenv("REMINDER_STORE_PATH")
+    reminder_store_path = (
+        Path(reminder_path_raw).expanduser() if reminder_path_raw else DEFAULT_REMINDER_STORE_PATH
+    )
+
     return Settings(
         telegram_bot_token=token,
         database_url=database_url,
@@ -60,6 +67,8 @@ def get_settings() -> "Settings":
         base_currency=(os.getenv("BASE_CURRENCY") or DEFAULT_BASE_CURRENCY).strip().upper(),
         gemini_api_key=os.getenv("GEMINI_API_KEY") or None,
         gemini_model=(os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip(),
+        reminder_timezone=(os.getenv("REMINDER_TIMEZONE") or DEFAULT_REMINDER_TIMEZONE).strip(),
+        reminder_store_path=reminder_store_path,
     )
 
 
@@ -75,6 +84,8 @@ class Settings:
         base_currency: str,
         gemini_api_key: str | None,
         gemini_model: str,
+        reminder_timezone: str = DEFAULT_REMINDER_TIMEZONE,
+        reminder_store_path: Path = DEFAULT_REMINDER_STORE_PATH,
     ):
         self.telegram_bot_token = telegram_bot_token
         self.database_url = database_url
@@ -84,3 +95,5 @@ class Settings:
         self.base_currency = base_currency
         self.gemini_api_key = gemini_api_key
         self.gemini_model = gemini_model
+        self.reminder_timezone = reminder_timezone
+        self.reminder_store_path = reminder_store_path

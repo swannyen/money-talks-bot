@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Bot runtime data (reminder preferences, etc.)
+data/

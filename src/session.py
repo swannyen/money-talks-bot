@@ -14,6 +14,7 @@ class UserSession:
         self.active_pending_id: Optional[str] = None
         self.last_inserted_id: Optional[int] = None
         self.guided_add: Optional[GuidedAddState] = None
+        self.reminder_awaiting: Optional[str] = None  # "time" | "day"
 
     def add_pending(self, item: PendingTransaction, *, make_active: bool = False) -> None:
         if make_active:

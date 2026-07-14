@@ -12,14 +12,16 @@ from src.formatting import format_pending_list
 from src.handlers.auth import reject_unauthorized
 from src.handlers.delete_transaction import delete_transaction_by_id
 from src.handlers.guided_add import start_guided_add
+from src.handlers.reminders import ensure_default_reminder
 from src.messages import build_help_message, build_start_message
 
 logger = logging.getLogger(__name__)
 
 
-async def start_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_unauthorized(update):
         return
+    await ensure_default_reminder(update, context)
     settings = get_settings()
     await update.effective_message.reply_text(build_start_message(settings), parse_mode="Markdown")
 

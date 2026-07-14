@@ -53,6 +53,17 @@ def test_start_message_uses_configured_portfolio():
     assert "guided" in build_start_message(settings).lower()
 
 
+def test_help_message_documents_reminders():
+    text = build_help_message(_settings(portfolios=["Alpha"]))
+    assert "/remind" in text
+    assert "monthly" in text.lower()
+
+
+def test_start_message_lists_remind_command():
+    text = build_start_message(_settings(portfolios=["Alpha"]))
+    assert "/remind" in text
+
+
 def test_manual_example_line_uses_configured_portfolio():
     line = manual_example_line(["MyBroker"], action="BUY")
     assert "portfolio MyBroker" in line

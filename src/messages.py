@@ -54,7 +54,8 @@ def _config_footer(settings: Settings) -> str:
     return (
         f"\n\n*Your config (.env)*\n"
         f"{portfolio_line}\n"
-        f"• Base currency: `{settings.base_currency}`"
+        f"• Base currency: `{settings.base_currency}`\n"
+        f"• Reminder timezone: `{settings.reminder_timezone}`"
     )
 
 
@@ -79,6 +80,7 @@ Add investment transactions to your Supabase database (same table as the Money T
 *Commands*
 /help — full guide
 /add — guided add (buttons)
+/remind — update reminder schedule
 /recent — last 10 saved rows (with ids)
 /delete 432 — delete by id (see /recent)
 /undo — delete last row saved this session
@@ -100,10 +102,18 @@ def build_help_message(settings: Settings) -> str:
 /start — welcome & quick overview
 /help — this guide
 /add — guided add (buttons)
+/remind — schedule update reminders (frequency + time)
+/remind off — turn reminders off
 /recent — last 10 transactions (shows database ids)
 /delete 432 — delete one row (get id from /recent)
 /undo — delete the last row *you saved in this bot session*
 /pending — list unconfirmed drafts
+
+---
+
+*Reminders*
+
+By default the bot pings you *monthly on the 15th at 20:00* (`Asia/Singapore`). Send `/remind` to change frequency (daily, weekly, every 2 weeks, monthly), day, or time — or `/remind off` to disable.
 
 ---
 

@@ -73,6 +73,7 @@ Edit `.env` with **your** values:
 | `BASE_CURRENCY` | Currency for `value_base` conversion, e.g. `USD` |
 | `GEMINI_API_KEY` | Optional — [Google AI Studio](https://aistudio.google.com/app/apikey) free key for screenshots |
 | `GEMINI_MODEL` | Optional — default `gemini-2.5-flash` |
+| `REMINDER_TIMEZONE` | Optional — default `Asia/Singapore` (used for `/remind` schedule) |
 
 **Never commit `.env`.** It is listed in `.gitignore`.
 
@@ -144,9 +145,11 @@ Multiple rows are queued one at a time — confirm each before the next.
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Quick overview |
+| `/start` | Quick overview (also enables default monthly reminder) |
 | `/help` | Full guide (uses your portfolios from `.env`) |
-| `/add` | Manual entry format |
+| `/add` | Guided entry with buttons |
+| `/remind` | Configure update reminders (frequency, day, time) |
+| `/remind off` | Disable reminders |
 | `/recent` | Last 10 saved rows (with database ids) |
 | `/delete 432` | Delete a row by id |
 | `/undo` | Delete last row saved this session |

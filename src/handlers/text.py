@@ -15,12 +15,13 @@ from src.handlers.drafts import (
     send_active_draft,
 )
 from src.handlers.guided_add import handle_guided_text
+from src.handlers.reminders import handle_reminder_text
 from src.messages import edit_portfolio_hint, unknown_edit_format_hint
 from src.parsers.manual import parse_manual_line
 from src.services.draft_enrichment import enrich_draft
 
 
-async def handle_text(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if await reject_unauthorized(update):
         return
 
@@ -33,6 +34,9 @@ async def handle_text(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> No
     delete_id = parse_delete_id(text)
     if delete_id is not None:
         await delete_transaction_by_id(update, delete_id)
+        return
+
+    if await handle_reminder_text(update, text, context):
         return
 
     if await handle_guided_text(update, text):
