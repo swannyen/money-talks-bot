@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from src.config import Settings, get_settings
 from src.messages import portfolio_edit_hints
-from src.models import ExtractedTransaction, PendingTransaction
+from src.models import ExtractedTransaction
 
 HintBuilder = Callable[[ExtractedTransaction, Settings], list[str]]
 
@@ -116,17 +116,4 @@ def format_transaction_summary(draft: ExtractedTransaction, *, title: str = "Tra
     lines.append("")
     lines.append("Reply:")
     lines.extend(_format_reply_hints(draft))
-    return "\n".join(lines)
-
-
-def format_pending_list(pending: list[PendingTransaction]) -> str:
-    if not pending:
-        return "No pending transactions."
-    lines = ["*Pending confirmations:*", ""]
-    for idx, item in enumerate(pending, start=1):
-        d = item.draft
-        label = f"{d.date} | {d.action} | {d.ticker} | {d.value} {d.currency}"
-        lines.append(f"{idx}. `{item.id[:8]}` — {label}")
-    lines.append("")
-    lines.append("Confirm the active draft, or upload a new file.")
     return "\n".join(lines)

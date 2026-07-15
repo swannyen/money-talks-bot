@@ -111,8 +111,13 @@ def _format_manual_error(exc: Exception) -> str:
     return f"Invalid manual entry: {exc}"
 
 
-def parse_manual_line(text: str) -> tuple[Optional[ExtractedTransaction], Optional[str]]:
-    if not _looks_like_manual_entry(text):
+def parse_manual_line(
+    text: str, *, require: bool = False
+) -> tuple[Optional[ExtractedTransaction], Optional[str]]:
+    """Parse a field-pair line. If ``require`` is False, return (None, None) when
+    the text does not look like a manual entry (used for free-form chat).
+    """
+    if not require and not _looks_like_manual_entry(text):
         return None, None
 
     data = parse_manual_fields(text)

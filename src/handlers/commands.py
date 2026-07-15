@@ -1,6 +1,7 @@
 """Slash command handlers."""
 
 import logging
+import re
 
 from sqlalchemy.exc import SQLAlchemyError
 from telegram import Update
@@ -8,14 +9,20 @@ from telegram.ext import ContextTypes
 
 from src.bot_state import database, sessions
 from src.config import get_settings
-from src.formatting import format_pending_list
 from src.handlers.auth import reject_unauthorized
 from src.handlers.delete_transaction import delete_transaction_by_id
 from src.handlers.guided_add import start_guided_add
+from src.handlers.manual_entry import submit_manual_line
 from src.handlers.reminders import ensure_default_reminder
-from src.messages import build_help_message, build_start_message
+from src.messages import (
+    build_add_usage_message,
+    build_help_message,
+    build_start_message,
+)
 
 logger = logging.getLogger(__name__)
+
+_ADD_COMMAND_PREFIX = re.compile(r"^/add(?:@\w+)?\s*", re.IGNORECASE)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -32,17 +39,6 @@ async def help_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
     settings = get_settings()
     await update.effective_message.reply_text(
         build_help_message(settings),
-        parse_mode="Markdown",
-    )
-
-
-async def pending_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
-    if await reject_unauthorized(update):
-        return
-    chat_id = update.effective_chat.id
-    session = sessions.for_chat(chat_id)
-    await update.effective_message.reply_text(
-        format_pending_list(session.pending),
         parse_mode="Markdown",
     )
 
@@ -105,6 +101,31 @@ async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def add_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manual one-line entry: ``/add date … | portfolio … | …``."""
+    if await reject_unauthorized(update):
+        return
+
+    raw = (update.effective_message.text or "").strip()
+    payload = _ADD_COMMAND_PREFIX.sub("", raw, count=1).strip()
+    if not payload:
+        settings = get_settings()
+        await update.effective_message.reply_text(
+            build_add_usage_message(settings),
+            parse_mode="Markdown",
+        )
+        return
+
+    handled = await submit_manual_line(update, payload, require=True)
+    if not handled:
+        settings = get_settings()
+        await update.effective_message.reply_text(
+            build_add_usage_message(settings),
+            parse_mode="Markdown",
+        )
+
+
+async def addsupport_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Guided button flow for adding a transaction."""
     if await reject_unauthorized(update):
         return
     await start_guided_add(update)

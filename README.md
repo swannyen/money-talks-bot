@@ -147,13 +147,13 @@ Multiple rows are queued one at a time — confirm each before the next.
 |---------|-------------|
 | `/start` | Quick overview (also enables default monthly reminder) |
 | `/help` | Full guide (uses your portfolios from `.env`) |
-| `/add` | Guided entry with buttons |
+| `/add …` | Manual one-line entry (fields after the command) |
+| `/addsupport` | Guided entry with buttons |
 | `/remind` | Configure update reminders (frequency, day, time) |
 | `/remind off` | Disable reminders |
 | `/recent` | Last 10 saved rows (with database ids) |
 | `/delete 432` | Delete a row by id |
 | `/undo` | Delete last row saved this session |
-| `/pending` | Drafts awaiting confirmation |
 
 Text replies: `confirm`, `edit <field> <value>`, `reject`, `confirm anyway`, `delete 432`.
 

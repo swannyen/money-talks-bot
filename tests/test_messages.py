@@ -48,20 +48,36 @@ def test_help_message_uses_placeholder_when_no_portfolios():
 
 def test_start_message_uses_configured_portfolio():
     settings = _settings(portfolios=["MyBroker"])
-    assert "edit portfolio MyBroker" in build_start_message(settings)
-    assert "/add" in build_start_message(settings)
-    assert "guided" in build_start_message(settings).lower()
+    text = build_start_message(settings)
+    assert "edit portfolio MyBroker" in text
+    assert "/add" in text
+    assert "/addsupport" in text
+    assert "confirm" in text.lower()
+    assert "How to add" in text
 
 
 def test_help_message_documents_reminders():
     text = build_help_message(_settings(portfolios=["Alpha"]))
     assert "/remind" in text
     assert "monthly" in text.lower()
+    assert "How to use" in text
+    assert "/addsupport" in text
 
 
 def test_start_message_lists_remind_command():
     text = build_start_message(_settings(portfolios=["Alpha"]))
     assert "/remind" in text
+    assert "/help" in text
+    assert "/addsupport" in text
+
+
+def test_add_usage_message_shows_example_and_addsupport():
+    from src.messages import build_add_usage_message
+
+    text = build_add_usage_message(_settings(portfolios=["Tiger"]))
+    assert "/add " in text
+    assert "portfolio Tiger" in text
+    assert "/addsupport" in text
 
 
 def test_manual_example_line_uses_configured_portfolio():

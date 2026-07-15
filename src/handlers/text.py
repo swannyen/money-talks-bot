@@ -10,14 +10,13 @@ from src.handlers.auth import reject_unauthorized
 from src.handlers.delete_transaction import delete_transaction_by_id, parse_delete_id
 from src.handlers.drafts import (
     discard_active_draft_message,
-    queue_draft,
     save_confirmed,
     send_active_draft,
 )
 from src.handlers.guided_add import handle_guided_text
+from src.handlers.manual_entry import submit_manual_line
 from src.handlers.reminders import handle_reminder_text
 from src.messages import edit_portfolio_hint, unknown_edit_format_hint
-from src.parsers.manual import parse_manual_line
 from src.services.draft_enrichment import enrich_draft
 
 
@@ -44,15 +43,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     guided = sessions.for_chat(chat_id).guided_add
     if guided is not None and guided.awaiting_text is None:
-        handled = await _dispatch_text_command(update, lower, text, chat_id, active)
+        handled = await _dispatch_text_command(update, lower, text, active)
         if handled:
             return
         await update.effective_message.reply_text(
-            "Use the buttons from /add, or send /add to start over."
+            "Use the buttons from /addsupport, or send /addsupport to start over."
         )
         return
 
-    handled = await _dispatch_text_command(update, lower, text, chat_id, active)
+    handled = await _dispatch_text_command(update, lower, text, active)
     if handled:
         return
 
@@ -66,11 +65,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     await update.effective_message.reply_text(
-        "Send a screenshot (photo), CSV/Excel file, use /help, or /add to add a transaction."
+        "Send a screenshot (photo), CSV/Excel, /addsupport, /add …, or /help."
     )
 
 
-async def _dispatch_text_command(update, lower: str, text: str, chat_id: int, active) -> bool:
+async def _dispatch_text_command(update, lower: str, text: str, active) -> bool:
     if lower == "reject":
         await discard_active_draft_message(update)
         return True
@@ -78,7 +77,7 @@ async def _dispatch_text_command(update, lower: str, text: str, chat_id: int, ac
     if lower in {"confirm", "yes"}:
         if not active:
             await update.effective_message.reply_text(
-                "Nothing to confirm. Upload a file or use /add."
+                "Nothing to confirm. Upload a file, /addsupport, or /add …"
             )
             return True
         await save_confirmed(update, active.draft)
@@ -95,23 +94,10 @@ async def _dispatch_text_command(update, lower: str, text: str, chat_id: int, ac
         await _handle_edit(update, active, text)
         return True
 
-    if await _try_manual_entry(update, text, chat_id):
+    if await submit_manual_line(update, text):
         return True
 
     return False
-
-
-async def _try_manual_entry(update, text: str, chat_id: int) -> bool:
-    manual, err = parse_manual_line(text)
-    if err:
-        await update.effective_message.reply_text(err)
-        return True
-    if not manual:
-        return False
-    queue_draft(chat_id, manual, make_active=True)
-    await update.effective_message.reply_text("Manual entry loaded:")
-    await send_active_draft(update)
-    return True
 
 
 async def _handle_edit(update: Update, active, text: str) -> None:

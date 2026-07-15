@@ -59,32 +59,46 @@ def _config_footer(settings: Settings) -> str:
     )
 
 
+def build_add_usage_message(settings: Settings) -> str:
+    example = manual_example_line(settings.portfolios)
+    return (
+        "*Manual add* — put the fields after `/add`:\n\n"
+        f"`/add {example}`\n\n"
+        f"Actions: {', '.join(ACCEPTED_ACTIONS)}.\n"
+        "For the button flow, send `/addsupport` instead."
+    )
+
+
 def build_start_message(settings: Settings) -> str:
     portfolio = portfolio_example(settings.portfolios, 0)
+    example = manual_example_line(settings.portfolios)
     return f"""\
 Welcome to *Money Talks Bot*.
 
-Add investment transactions to your Supabase database (same table as the Money Talks dashboard). Nothing is saved until you *confirm*.
+I save investment transactions to your Money Talks database. *Nothing is written until you confirm.*
 
-*Send*
-• *Photo* — broker screenshot (dividend/trade history)
-• *File* — CSV or Excel (broker dividend export or Money Talks export)
-• */add* — step-by-step guided entry (buttons)
-• *One-line text* — manual entry (see `/help`)
+*How to add a transaction*
 
-*Then*
-1. Review the parsed draft (edit anything wrong).
-2. Set portfolio if missing: `edit portfolio {portfolio}`
-3. Reply `confirm` — or `reject` to discard.
+1. Choose a way to enter it:
+   • `/add …` — one-line manual fields (example below)
+   • `/addsupport` — guided steps with buttons
+   • *Photo* — broker screenshot
+   • *File* — CSV / Excel export
+2. Check the draft summary.
+3. Fix anything wrong, e.g. `edit portfolio {portfolio}`
+4. Reply `confirm` to save, or `reject` to discard.
 
-*Commands*
+*Manual example*
+`/add {example}`
+
+*Useful commands*
 /help — full guide
-/add — guided add (buttons)
-/remind — update reminder schedule
-/recent — last 10 saved rows (with ids)
-/delete 432 — delete by id (see /recent)
-/undo — delete last row saved this session
-/pending — drafts waiting for confirmation
+/add — manual one-line add
+/addsupport — add with buttons
+/remind — reminder schedule
+/recent — last 10 saved rows
+/delete 432 — delete by id
+/undo — undo last save *this session*
 """
 
 
@@ -97,105 +111,108 @@ def build_help_message(settings: Settings) -> str:
     edit_portfolio_lines = _portfolio_edit_examples(settings.portfolios)
 
     return f"""\
-*Commands*
+*How to use Money Talks Bot*
 
-/start — welcome & quick overview
-/help — this guide
-/add — guided add (buttons)
-/remind — schedule update reminders (frequency + time)
-/remind off — turn reminders off
-/recent — last 10 transactions (shows database ids)
-/delete 432 — delete one row (get id from /recent)
-/undo — delete the last row *you saved in this bot session*
-/pending — list unconfirmed drafts
+Nothing is saved until you reply `confirm`. If something looks wrong, `edit …` or `reject`.
+
+---
+
+*Manual add (`/add`)*
+
+Put the fields on the same line after `/add`:
+
+```
+/add {manual_line}
+```
+
+Colon style also works after `/add`:
+`/add date: 2026-06-04 | portfolio: {portfolio} | …`
+
+Actions: {', '.join(ACCEPTED_ACTIONS)}.
+You can still paste the field line *without* `/add` as a normal message.
+
+---
+
+*Button add (`/addsupport`)*
+
+1. Send `/addsupport`
+2. Tap the type (BUY, SELL, DIVIDEND, FEE, DEPOSIT)
+3. Follow the buttons for portfolio, date, ticker, amount, etc.
+4. Tap *Confirm* (or type `confirm`) to save
+
+DIVIDEND offers holdings to tap. DEPOSIT skips ticker (set to `NA`).
+
+---
+
+*Photo & files*
+
+*Photo* — send a broker screenshot as a *photo* (not a document). Best for dividend layouts. Portfolio is not guessed — set it after parsing:
+`edit portfolio {portfolio}` → `confirm`
+
+*CSV / Excel* — send as a document.
+• Broker dividend CSV (Date, Symbol, dividends, currency, …) → action DIVIDEND; still set portfolio
+• Money Talks export → needs Date, Portfolio, Ticker, Action, Currency, Value
+
+Several rows are queued — confirm one, then the next.
+
+---
+
+*Review & edit*
+
+After any entry you get a summary. Common replies:
+
+```
+confirm
+reject
+edit portfolio {portfolio_alt}
+edit value 1.41
+edit ticker AAPL
+edit quantity 3
+```
+
+Your portfolios:
+{edit_portfolio_lines}
+
+*DIVIDEND:* quantity can auto-fill from holdings (BUY − SELL) once portfolio is set.
+*Duplicates:* if a similar row exists, reply `confirm anyway` to save anyway.
+
+---
+
+*Find & delete*
+
+```
+/recent          → see ids
+/delete 432      → delete that row
+delete 432       → same, as a text reply
+/undo            → delete last row saved *in this bot session*
+```
 
 ---
 
 *Reminders*
 
-By default the bot pings you *monthly on the 15th at 20:00* (`Asia/Singapore`). Send `/remind` to change frequency (daily, weekly, every 2 weeks, monthly), day, or time — or `/remind off` to disable.
+The bot can ping you to log updates.
+Default: *monthly on the 15th at 20:00* (`{settings.reminder_timezone}`).
+
+• `/remind` — frequency (daily / weekly / every 2 weeks / monthly), day, or time
+• `/remind off` / `/remind on` — disable or re-enable
+
+Reminders start (with defaults) the first time you send `/start`.
 
 ---
 
-*1. Broker screenshot (photo)*
+*Commands*
 
-Send as a *photo* (not a file).
+/start — this overview
+/help — this guide
+/add — manual one-line add
+/addsupport — guided add with buttons
+/remind — reminder settings
+/recent — last 10 transactions
+/delete 432 — delete by id
+/undo — undo last session save
 
-Supported layouts:
-• *Mobile history* — Cash Dividend + Dividend Tax → one net DIVIDEND
-• *Dividend table* — web/export style rows
-
-Portfolio is never guessed. After parsing:
-`edit portfolio {portfolio}` → `confirm`
-
-Requires `GEMINI_API_KEY` in your bot `.env`.
-
----
-
-*2. CSV / Excel (file)*
-
-Send the file as a document.
-
-• *Broker dividend CSV* — columns like Date, Symbol, Cash Dividends, Net Cash Value, Currency → action set to DIVIDEND automatically; you still add portfolio.
-• *Money Talks export* — must include Date, Portfolio, Ticker, Action, Currency, Value (and optional Quantity).
-
-Multiple rows are queued one at a time — confirm each before the next.
-
----
-
-*3. Guided add (`/add`)*
-
-Send `/add` — the bot asks what you're adding and walks you through with *buttons* (BUY, SELL, DIVIDEND, FEE, DEPOSIT → portfolio → date → …).
-
-Type only when prompted (ticker, quantity, amount). Reply `confirm` at the end to save.
-
-*One-line manual* (alternative): field pairs in one message:
-
-```
-{manual_line}
-```
-
-Colon format also works: `date: 2026-06-04 | portfolio: {portfolio} | ...`
-
----
-
-*4. Review, edit, save*
-
-After any import, the bot shows a summary with *contextual* edit hints (your portfolios from `.env`, extracted values).
-
-```
-confirm
-edit portfolio {portfolio_alt}
-edit value 1.41
-edit ticker AAPL
-reject
-```
-
-Configured portfolios — reply with one of:
-{edit_portfolio_lines}
-
-*DIVIDEND* drafts: once portfolio is set, *quantity* is filled from your open holdings in the database (BUY − SELL). Override with `edit quantity 3` if needed.
-
-*Duplicates:* if a similar row exists, you'll be warned. Reply `confirm anyway` to save anyway.
-
----
-
-*5. Delete saved rows*
-
-```
-/recent
-/delete 432
-```
-
-Or reply: `delete 432`
-
-`/undo` only removes the last transaction saved in the current bot session (not the same as `/delete`).
-
----
-
-*Security*
-
-Only Telegram user ids listed in `ALLOWED_TELEGRAM_USER_IDS` can use this bot.
+*Security:* only user ids in `ALLOWED_TELEGRAM_USER_IDS` can use this bot.
 {_config_footer(settings)}
 """
 

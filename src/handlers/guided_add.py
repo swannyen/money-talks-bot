@@ -217,7 +217,7 @@ async def handle_guided_callback(update: Update, _context: ContextTypes.DEFAULT_
 
     state = _get_guided(chat_id)
     if state is None:
-        await query.edit_message_text("Session expired. Send /add to start again.")
+        await query.edit_message_text("Session expired. Send /addsupport to start again.")
         return
 
     if data == "ga:cancel":

@@ -27,7 +27,7 @@ DEFAULT_TIMEZONE = "Asia/Singapore"
 
 REMINDER_MESSAGE = (
     "⏰ *Reminder:* time to update *Money Talks* with your latest transactions.\n\n"
-    "Send a screenshot, CSV/Excel, or use /add."
+    "Send a screenshot, CSV/Excel, /addsupport, or `/add …`."
 )
 
 
