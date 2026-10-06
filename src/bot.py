@@ -8,9 +8,10 @@ import sys
 from telegram import Update
 from telegram.ext import Application
 
-from src.bot_state import get_reminder_store
+from src.bot_state import database, get_reminder_store
 from src.config import get_settings
 from src.handlers.register import register_handlers
+from src.services.keepalive import schedule_keepalive
 from src.services.reminder_jobs import reschedule_all
 
 logging.basicConfig(
@@ -30,6 +31,14 @@ async def _post_init(app: Application) -> None:
     prefs = get_reminder_store().list_all()
     reschedule_all(app.job_queue, prefs)
     logger.info("Loaded %s reminder preference(s)", len(prefs))
+
+    settings = get_settings()
+    schedule_keepalive(
+        app.job_queue,
+        database,
+        interval_hours=settings.db_keepalive_hours,
+        alert_chat_ids=settings.allowed_telegram_user_ids,
+    )
 
 
 def main() -> None:

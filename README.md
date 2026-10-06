@@ -2,20 +2,39 @@
 
 Telegram bot for adding **investment transactions** to a Postgres database — with confirmation before every save.
 
-Send a broker screenshot, CSV/Excel export, or a manual text line; review the parsed draft; reply `confirm` to write to the database.
+Works standalone or alongside the [Money Talks](../money-talks/) Streamlit dashboard (same `transactions` table).
 
-Works standalone or alongside the [Money Talks](../money-talks/) Streamlit dashboard (same `transactions` table schema).
+---
+
+## What this bot can do
+
+| Capability | How | Needs LLM? |
+|------------|-----|------------|
+| **Manual one-line add** | `/add date … \| portfolio … \| …` (or paste the field line alone) | No |
+| **Guided add with buttons** | `/addsupport` — pick BUY / SELL / DIVIDEND / FEE / DEPOSIT, then follow steps | No |
+| **CSV / Excel (.csv, .xlsx)** | Send as a *document* — known layouts only (see below) | No |
+| **Broker screenshot** | Send as a *photo* — dividend-style layouts work best | Yes — `GEMINI_API_KEY` |
+| **Review before save** | Edit fields, `confirm` / `reject`, duplicate warning + `confirm anyway` | No |
+| **Recent / delete / undo** | `/recent`, `/delete <id>`, `/undo` (last save *this session*) | No |
+| **Update reminders** | `/remind` — default monthly on the 15th at 20:00 (`REMINDER_TIMEZONE`) | No |
+| **DIVIDEND quantity from holdings** | Auto-fills from BUY − SELL when history exists for that portfolio + ticker | No |
+| **FX `value_base`** | Converted on save via Frankfurter (best-effort) | No |
+| **Keeps Supabase awake** | Queries the database every 4 hours so the free-plan project is never paused for inactivity | No |
+
+Nothing is written to the database until you reply `confirm` (or tap Confirm after `/addsupport`).
+
+---
 
 ## What you need
 
 | Requirement | Notes |
 |-------------|-------|
 | **Telegram bot token** | Free — create via [@BotFather](https://t.me/BotFather) |
-| **Your Telegram user id** | Get from [@userinfobot](https://t.me/userinfobot) — used to lock the bot to you |
+| **Your Telegram user id** | Get from [@userinfobot](https://t.me/userinfobot) — locks the bot to you |
 | **Postgres database** | [Supabase](https://supabase.com) free tier works well |
-| **Gemini API key** | Optional — only for broker **photo** parsing |
+| **Gemini API key** | Optional — **only** for broker **photo** parsing |
 
-CSV/Excel and manual text entry do **not** need an LLM.
+CSV/Excel, `/add`, and `/addsupport` do **not** need an LLM.
 
 ---
 
@@ -55,6 +74,8 @@ CREATE TABLE transactions (
 
 Copy the **connection pooler** URL (port **6543**, host like `aws-0-<region>.pooler.supabase.com`). Do **not** use the direct `db.*.supabase.co` URL — it often fails on IPv4-only networks.
 
+**Note:** Quantity is optional in the bot UI; on save it defaults to `1` if omitted.
+
 ### 3. Configure environment
 
 ```bash
@@ -66,18 +87,20 @@ Edit `.env` with **your** values:
 | Variable | What to put |
 |----------|-------------|
 | `TELEGRAM_BOT_TOKEN` | Token from BotFather |
-| `ALLOWED_TELEGRAM_USER_IDS` | Your Telegram id(s), comma-separated — only these users can use the bot |
+| `ALLOWED_TELEGRAM_USER_IDS` | Your Telegram id(s), comma-separated |
 | `DATABASE_URL` | Postgres pooler URL from step 2 |
-| `PORTFOLIOS` | Your broker/account names, e.g. `IBKR,Robinhood,401k` — used in help text and validation |
+| `PORTFOLIOS` | Your broker/account names, e.g. `IBKR,Robinhood,401k` |
 | `CURRENCIES` | Currencies you trade in, e.g. `USD,EUR` |
 | `BASE_CURRENCY` | Currency for `value_base` conversion, e.g. `USD` |
-| `GEMINI_API_KEY` | Optional — [Google AI Studio](https://aistudio.google.com/app/apikey) free key for screenshots |
+| `GEMINI_API_KEY` | Optional — [Google AI Studio](https://aistudio.google.com/app/apikey) for screenshots |
 | `GEMINI_MODEL` | Optional — default `gemini-2.5-flash` |
-| `REMINDER_TIMEZONE` | Optional — default `Asia/Singapore` (used for `/remind` schedule) |
+| `REMINDER_TIMEZONE` | Optional — default `Asia/Singapore` |
+| `REMINDER_STORE_PATH` | Optional — where reminder prefs are stored (default `data/reminders.json`) |
+| `DB_KEEPALIVE_HOURS` | Optional — hours between database keep-alive queries (default `4`; `0` turns it off) |
 
 **Never commit `.env`.** It is listed in `.gitignore`.
 
-Help messages (`/start`, `/help`, `/add`) and edit hints automatically use your `PORTFOLIOS` from `.env`. If unset, examples show `<Portfolio>` as a placeholder.
+Help text (`/start`, `/help`) and edit hints use your `PORTFOLIOS` from `.env`.
 
 ### 4. Run locally
 
@@ -87,73 +110,88 @@ python -m src.bot
 
 Message your bot on Telegram. If you get no response, check that your user id is in `ALLOWED_TELEGRAM_USER_IDS`.
 
-**Common setup issues:** wrong pooler URL (use port 6543, not the direct Supabase host), typo in bot token, or Telegram id missing from the allow list.
+**Common setup issues:** wrong pooler URL (use port 6543), typo in bot token, Telegram id missing from the allow list, or **two bot processes** running (kill extras with `pkill -f "python -m src.bot"`).
 
 ### 5. Deploy (optional)
 
-Run as a long-lived process with your `.env` loaded:
+The bot is a **long-lived worker**, not a web app. Keep the database on Supabase; run the Python process on Railway / Fly.io / Render / a VPS / Docker:
 
 ```bash
 docker build -t money-talks-bot .
-docker run --env-file .env money-talks-bot
+docker run -d --env-file .env --restart unless-stopped \
+  -v money-talks-data:/app/data \
+  money-talks-bot
 ```
 
-Or deploy to Railway / Fly.io / Render as a **worker** service (not a web service) with command `python -m src.bot`.
+Or: worker service with command `python -m src.bot` and the same env vars.
 
-**Deploy caveat:** pending drafts live in **process memory**. If the container restarts, unconfirmed drafts are lost (already-saved rows in Postgres are fine). One container is enough for personal use; do not run multiple replicas without adding shared session storage.
+**Deploy caveats:**
+
+- Unconfirmed drafts live in **process memory** — a restart clears them (already-saved rows in Postgres are fine).
+- Reminder settings are stored under `data/` — mount a volume (or set `REMINDER_STORE_PATH`) so `/remind` prefs survive redeploys.
+- Run **one** replica only.
+- The process must stay up for Telegram polling and scheduled reminders.
+- **Supabase keep-alive:** Supabase pauses free-plan projects after about a week with too few database queries. While the bot is running it runs `SELECT COUNT(*) FROM transactions` every `DB_KEEPALIVE_HOURS` (default 4) and logs `Database keep-alive ok`. If 3 attempts in a row fail, it messages the allowed users once, then again when the database is back. It only works while the bot is up: pick a host that doesn't sleep idle workers, and if the project is already paused, restore it from the Supabase dashboard first — a query can't wake a paused project.
 
 ---
 
 ## Using the bot
 
-### Input methods
-
-| Input | How | Works out of the box? |
-|-------|-----|------------------------|
-| **Photo** | Send a broker screenshot as a photo (requires `GEMINI_API_KEY`) | Partially — see [caveats](#caveats--what-may-not-work-out-of-the-box) |
-| **File** | Send a CSV or Excel export as a document | Partially — known column layouts only |
-| **Manual text** | One line with field pairs — see `/add` for the format | Yes — always available as a fallback |
-
-The bot never saves automatically. Every draft must be confirmed.
-
 ### Typical flow
 
-1. Send photo, file, or manual text.
-2. Bot shows a parsed summary and what's still missing (usually **portfolio** for broker exports).
-3. Fix anything: `edit portfolio MyBroker`, `edit value 1850`, etc.
-4. Reply `confirm` to save, or `reject` to discard.
+1. Add a draft via `/add …`, `/addsupport`, photo, or CSV/Excel.
+2. Review the summary; fix with `edit portfolio MyBroker`, `edit value 1850`, etc.
+3. Reply `confirm` to save, or `reject` to discard.
 
 If a similar row already exists, the bot warns you. Reply `confirm anyway` to save anyway.
 
+### Manual add (`/add`)
+
+```
+/add date 2026-06-04 | portfolio MyBroker | action BUY | ticker AAPL | currency USD | quantity 10 | value 1850
+```
+
+Actions: `BUY`, `SELL`, `DIVIDEND`, `FEE`, `DEPOSIT`.  
+Bare `/add` shows the template. You can also paste the field line *without* `/add`.
+
+### Guided add (`/addsupport`)
+
+Button-driven: type → portfolio → date → ticker / quantity / currency / value (steps depend on action).  
+DIVIDEND can offer holdings buttons. DEPOSIT skips ticker (`NA`).
+
 ### CSV / Excel formats
+
+Send as a **document**. Supported extensions: **`.csv`**, **`.xlsx`** (not `.xls`).
 
 **Broker dividend export** (portfolio not in file — you add it after parsing):
 
 `Date`, `Symbol`, `Cash Dividends`, `Net Cash Value`, `Currency`, …
 
-See `tests/fixtures/tiger_dividend.csv` for a real example. Action is set to **DIVIDEND** automatically.
+See `tests/fixtures/tiger_dividend.csv`. Action is set to **DIVIDEND** automatically.
 
-**CSV caveat:** only exports whose headers match the built-in detectors are parsed automatically. A different broker's column names or sheet layout will fail or produce empty drafts — add detection logic in `src/parsers/spreadsheet.py` / `src/parsers/broker_dividend.py`, or enter the row manually via `/add`.
-
-**Tracker export with portfolio column** (e.g. Money Talks export):
+**Money Talks–style export** (includes portfolio):
 
 `Date`, `Portfolio`, `Ticker`, `Currency`, `Action`, `Quantity`, `Value`
 
-Multiple rows are queued one at a time — confirm each before the next.
+Multiple rows are queued — confirm each before the next.
+
+### Broker screenshots (photos)
+
+Send as a **photo** (not a file attachment). Requires `GEMINI_API_KEY`. Tuned for **dividend** table / mobile activity layouts. Portfolio is never guessed — set it with `edit portfolio …` then `confirm`.
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Quick overview (also enables default monthly reminder) |
-| `/help` | Full guide (uses your portfolios from `.env`) |
-| `/add …` | Manual one-line entry (fields after the command) |
+| `/start` | Overview + enables default monthly reminder on first use |
+| `/help` | Full guide |
+| `/add …` | Manual one-line entry |
 | `/addsupport` | Guided entry with buttons |
-| `/remind` | Configure update reminders (frequency, day, time) |
-| `/remind off` | Disable reminders |
+| `/remind` | Configure update reminders |
+| `/remind off` / `/remind on` | Disable / re-enable reminders |
 | `/recent` | Last 10 saved rows (with database ids) |
 | `/delete 432` | Delete a row by id |
-| `/undo` | Delete last row saved this session |
+| `/undo` | Delete last row saved *this bot session* |
 
 Text replies: `confirm`, `edit <field> <value>`, `reject`, `confirm anyway`, `delete 432`.
 
@@ -161,69 +199,56 @@ Text replies: `confirm`, `edit <field> <value>`, `reject`, `confirm anyway`, `de
 
 ## Caveats & what may not work out of the box
 
-This repo is a **starting point**, not a universal broker adapter. The flows below are tested against specific layouts; your broker may differ.
+This repo is a **starting point**, not a universal broker adapter.
 
-### Broker screenshots (photos)
+### Broker screenshots
 
-Vision parsing uses Gemini with prompts tuned for **dividend-style layouts** (table rows and mobile activity feeds with cash dividend / tax lines). It works best when:
+Vision uses Gemini with prompts tuned for **dividend-style** layouts. It works best when the crop is small and text is readable.
 
-- The screenshot shows one transaction (or a small, readable crop).
-- Text is legible and not heavily overlapped.
+**Often needs edits or manual entry instead:**
 
-**May not work without changes:**
+- Different broker UIs (IBKR, Schwab, banks, etc.)
+- Buy/sell trade tickets (less mature than dividends)
+- Images sent as **documents** (only Telegram *photos* are parsed)
+- Heavy multi-transaction screenshots
 
-- **Different broker UI** (Interactive Brokers, Schwab, local banks, etc.) — field names, date formats, and row structure vary. Gemini might extract something usable, but often you'll need to `edit` several fields or **use manual entry** (`/add`) instead.
-- **Buy/sell trade confirmations** — dividend parsing is more mature than trade tickets; trade screenshots may need prompt updates in `src/parsers/prompts.py` and mapping tweaks in `src/parsers/vision_mapping.py`.
-- **Multiple transactions in one image** — may queue several drafts; quality depends on the screenshot.
+If Gemini is unavailable in your region, or you do not want images sent to Google, skip photos — use `/add`, `/addsupport`, or supported CSV.
 
-**Practical fallback:** `/add` manual text always works and needs no LLM:
+### CSV / Excel
 
-```
-date 2026-06-04 | portfolio MyBroker | action BUY | ticker AAPL | currency USD | quantity 10 | value 1850
-```
-
-Review the draft, `edit` anything wrong, then `confirm`.
-
-### CSV / Excel files
-
-Auto-import recognizes:
-
-- Broker **dividend exports** with columns like `Date`, `Symbol`, `Net Cash Value`, `Currency` (see fixture).
-- Exports that already include `Portfolio`, `Ticker`, `Action`, `Value` (Money Talks-style).
-
-Any other export shape requires **you to extend the parser** or use manual entry. There is no generic "any spreadsheet" importer.
+Only the two layouts above are auto-detected. Other exports need a parser extension in `src/parsers/spreadsheet.py` / `broker_dividend.py`, or manual entry. There is no generic “any spreadsheet” importer.
 
 ### Portfolio is never guessed
 
-From screenshots and most broker CSVs, **portfolio is not inferred**. You must set it before confirm, e.g. `edit portfolio MyBroker`. Your allowed names come from `PORTFOLIOS` in `.env`.
+From screenshots and most broker CSVs you must set portfolio before confirm, e.g. `edit portfolio MyBroker`. Allowed names come from `PORTFOLIOS` in `.env`.
 
-### FX and metadata enrichment
+### FX and metadata
 
-On confirm, the bot tries to:
+On confirm the bot tries to:
 
-- Convert `value` → `value_base` via the [Frankfurter](https://www.frankfurter.app/) API.
-- Look up `asset_name` / `asset_class` via yfinance.
+- Convert `value` → `value_base` via [Frankfurter](https://www.frankfurter.app/)
+- Look up `asset_name` / `asset_class` via yfinance
 
-**Caveats:** exotic currency pairs may fail (row still saves; `value_base` may be empty with a note in the draft). Obscure or non-US tickers may not resolve metadata — you can leave those fields blank or set them manually if you extend the model.
+Exotic FX pairs or obscure tickers may leave those fields empty; the row still saves.
 
 ### DIVIDEND quantity from holdings
 
-For dividend rows, quantity can be filled from open positions (BUY − SELL) **only if** matching BUY/SELL history already exists in the database for that portfolio + ticker. New tickers or first-time dividends need `edit quantity …` or a prior buy recorded.
+Filled from open positions (BUY − SELL) **only if** matching history already exists for that portfolio + ticker. Otherwise use `edit quantity …` or enter quantity in `/add` / `/addsupport`.
 
 ### Gemini API
 
-- Requires `GEMINI_API_KEY`; free tier has rate limits (~10 req/min on Flash).
-- Google's free tier is **not available in all regions** (e.g. some EU/UK/CH restrictions) — check [Google AI Studio](https://aistudio.google.com/) for your account.
-- Screenshot bytes are sent to Google's API; do not use this path if that is unacceptable for your data policy. CSV/manual paths stay local.
+- Free tier rate limits (~10 req/min on Flash)
+- Not available in all regions
+- Screenshot bytes go to Google’s API
 
 ### When in doubt
 
 | Situation | Easiest path |
 |-----------|----------------|
-| Screenshot parses badly | `edit` fields, or `/add` manual line |
-| CSV not recognized | Manual entry, or add a parser for your export |
-| Don't want an LLM | Skip photos; use CSV (if supported) or `/add` |
-| New broker long-term | Fork and extend `src/parsers/` (see Customization) |
+| Screenshot parses badly | `edit` fields, or `/add` / `/addsupport` |
+| CSV not recognized | Manual entry, or extend the parser |
+| Don’t want an LLM | Skip photos; use CSV (if supported), `/add`, or `/addsupport` |
+| New broker long-term | Fork and extend `src/parsers/` |
 
 ---
 
@@ -231,28 +256,22 @@ For dividend rows, quantity can be filled from open positions (BUY − SELL) **o
 
 If you also run [Money Talks](../money-talks/):
 
-- Use the **same** `DATABASE_URL` and the **same** `PORTFOLIOS` / `CURRENCIES` / `BASE_CURRENCY` in both apps.
-- Transactions added via Telegram appear in the Streamlit dashboard immediately.
-- The bot fills `value_base` via the Frankfurter FX API (same approach as Money Talks).
-- DIVIDEND quantity can be inferred from open holdings (BUY − SELL) once portfolio is set.
-
-You do **not** need the dashboard to use this bot — any Postgres database with the schema above is enough.
+- Use the **same** `DATABASE_URL` and the **same** `PORTFOLIOS` / `CURRENCIES` / `BASE_CURRENCY`
+- Telegram saves show up in the Streamlit dashboard
+- You do **not** need the dashboard to use this bot — any Postgres with the schema above works
 
 ---
 
 ## Customization
 
-Extend the bot when your broker is not covered. Typical touch points:
-
 | Goal | Where to look |
 |------|----------------|
-| Change help / command text | `src/messages.py` |
-| **New broker CSV export** | `src/parsers/spreadsheet.py`, `src/parsers/broker_dividend.py` — add header detection and row mapping; add a fixture under `tests/fixtures/` and a test |
-| **New screenshot layout** | `src/parsers/prompts.py` (describe the UI to Gemini), `src/parsers/vision_mapping.py` (map JSON → draft), optionally `src/parsers/vision_schema.py` |
-| Adjust duplicate detection | `src/services/duplicate_checker.py` |
-| Add Telegram commands | `src/handlers/commands.py`, register in `src/handlers/register.py` |
-
-You do **not** need to customize anything to use **manual text entry** — it is the universal fallback.
+| Help / command text | `src/messages.py` |
+| New broker CSV | `src/parsers/spreadsheet.py`, `src/parsers/broker_dividend.py` + fixture under `tests/fixtures/` |
+| New screenshot layout | `src/parsers/prompts.py`, `src/parsers/vision_mapping.py` |
+| Duplicate detection | `src/services/duplicate_checker.py` |
+| New Telegram commands | `src/handlers/commands.py` + `src/handlers/register.py` |
+| Reminders | `src/reminders.py`, `src/handlers/reminders.py` |
 
 Run `make check` after code changes (black + pylint + pytest).
 
@@ -261,7 +280,8 @@ Run `make check` after code changes (black + pylint + pytest).
 ## Tests
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements.txt   # includes pytest
+# or: pip install -r requirements-dev.txt
 make check          # format check + lint + tests
 make format         # auto-format
 pytest
@@ -274,16 +294,23 @@ pytest
 ```
 money-talks-bot/
   src/
-    bot.py                 # Entrypoint (long polling)
-    config.py              # Reads .env
-    models.py              # Transaction draft schema
-    messages.py            # /start, /help, /add copy
-    handlers/              # Telegram commands and message routing
-    parsers/               # CSV/Excel, manual text, vision (Gemini)
-    services/              # Postgres, FX, holdings, duplicates
+    bot.py                 # Entrypoint (polling + reminder jobs)
+    config.py              # .env settings
+    models.py              # Draft transaction schema
+    messages.py            # /start, /help, /add usage copy
+    guided_add.py          # /addsupport step logic (no Telegram imports)
+    reminders.py           # Reminder preference model
+    session.py             # In-memory drafts per chat
+    edit_commands.py       # edit <field> <value>
+    formatting.py          # Draft summary text
+    bot_state.py           # Shared database + session + reminder store
+    handlers/              # Commands, text, photos, files, guided, reminders
+    parsers/               # Manual, CSV/Excel, vision (Gemini)
+    services/              # Postgres, FX, holdings, duplicates, reminder jobs, DB keep-alive
   tests/
     fixtures/              # Sample CSV inputs
-  .env.example             # Template — copy to .env
+  data/                    # Runtime reminder prefs (gitignored)
+  .env.example
   Dockerfile
   Makefile
 ```
@@ -292,15 +319,7 @@ money-talks-bot/
 
 ## Security
 
-- Only user ids in `ALLOWED_TELEGRAM_USER_IDS` can use the bot.
-- Secrets live in `.env` only — not in source code.
-- Uploaded files are parsed in memory; not stored on disk.
-- Logs avoid file contents and secrets.
-
----
-
-## LLM note (screenshots only)
-
-Screenshot parsing uses **Google Gemini** by default. CSV/Excel parsing is local (pandas) and does not send data to any LLM.
-
-Free Gemini keys are available at [Google AI Studio](https://aistudio.google.com/app/apikey). If vision is unavailable in your region or you prefer not to send images to a third party, use **manual entry** or supported CSV imports only — see [Caveats](#caveats--what-may-not-work-out-of-the-box).
+- Only user ids in `ALLOWED_TELEGRAM_USER_IDS` can use the bot
+- Secrets live in `.env` only
+- Uploaded files are parsed in memory (not stored on disk)
+- Logs avoid file contents and secrets

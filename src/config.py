@@ -1,3 +1,4 @@
+import math
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -12,6 +13,7 @@ DEFAULT_CURRENCIES = ["SGD", "USD", "HKD", "EUR", "JPY"]
 DEFAULT_BASE_CURRENCY = "SGD"
 DEFAULT_REMINDER_TIMEZONE = "Asia/Singapore"
 DEFAULT_REMINDER_STORE_PATH = _PROJECT_ROOT / "data" / "reminders.json"
+DEFAULT_DB_KEEPALIVE_HOURS = 4.0
 ACCEPTED_ACTIONS = ("FEE", "BUY", "SELL", "DIVIDEND", "DEPOSIT")
 
 
@@ -35,6 +37,19 @@ def _parse_str_list(raw: str | None, default: list[str]) -> list[str]:
     if not raw:
         return default.copy()
     return [_strip_quotes(item) for item in raw.split(",") if item.strip()]
+
+
+def _parse_keepalive_hours(raw: str | None) -> float:
+    """Hours between database keep-alive queries; 0 turns the keep-alive off."""
+    if raw is None or not _strip_quotes(raw):
+        return DEFAULT_DB_KEEPALIVE_HOURS
+    try:
+        hours = float(_strip_quotes(raw))
+    except ValueError as exc:
+        raise RuntimeError(f"DB_KEEPALIVE_HOURS must be a number of hours, got {raw!r}") from exc
+    if not math.isfinite(hours) or hours < 0:
+        raise RuntimeError("DB_KEEPALIVE_HOURS must be 0 (off) or a positive number of hours")
+    return hours
 
 
 @lru_cache
@@ -69,6 +84,7 @@ def get_settings() -> "Settings":
         gemini_model=(os.getenv("GEMINI_MODEL") or "gemini-2.5-flash").strip(),
         reminder_timezone=(os.getenv("REMINDER_TIMEZONE") or DEFAULT_REMINDER_TIMEZONE).strip(),
         reminder_store_path=reminder_store_path,
+        db_keepalive_hours=_parse_keepalive_hours(os.getenv("DB_KEEPALIVE_HOURS")),
     )
 
 
@@ -86,6 +102,7 @@ class Settings:
         gemini_model: str,
         reminder_timezone: str = DEFAULT_REMINDER_TIMEZONE,
         reminder_store_path: Path = DEFAULT_REMINDER_STORE_PATH,
+        db_keepalive_hours: float = DEFAULT_DB_KEEPALIVE_HOURS,
     ):
         self.telegram_bot_token = telegram_bot_token
         self.database_url = database_url
@@ -97,3 +114,4 @@ class Settings:
         self.gemini_model = gemini_model
         self.reminder_timezone = reminder_timezone
         self.reminder_store_path = reminder_store_path
+        self.db_keepalive_hours = db_keepalive_hours

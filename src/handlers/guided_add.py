@@ -1,4 +1,4 @@
-"""Guided /add conversation with inline buttons."""
+"""Guided /addsupport conversation with inline buttons."""
 
 from __future__ import annotations
 

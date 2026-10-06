@@ -64,9 +64,9 @@ def load_dataframe(file_obj: BinaryIO, filename: str) -> pd.DataFrame:
     lower = filename.lower()
     if lower.endswith(".csv"):
         return pd.read_csv(file_obj)
-    if lower.endswith((".xlsx", ".xls")):
+    if lower.endswith(".xlsx"):
         return pd.read_excel(file_obj)
-    raise ValueError("Unsupported file type. Send .csv, .xlsx, or .xls")
+    raise ValueError("Unsupported file type. Send .csv or .xlsx")
 
 
 def parse_spreadsheet_bytes(content: bytes, filename: str) -> list[ExtractedTransaction]:

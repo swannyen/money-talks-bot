@@ -55,6 +55,15 @@ class TransactionDatabase:
         self._engine = create_engine(url, **engine_kwargs)
         return self._engine
 
+    def ping(self) -> int:
+        """Run a cheap query on the transactions table and return its row count.
+
+        Used by the keep-alive job for the DB
+        This reads a real table rather than just opening a connection.
+        """
+        with self.engine.connect() as conn:
+            return int(conn.execute(text("SELECT COUNT(*) FROM transactions")).scalar_one())
+
     def get_recent(self, limit: int = 10) -> pd.DataFrame:
         query = text("""
             SELECT id, date, portfolio, ticker, currency, action, quantity, value
@@ -140,11 +149,6 @@ class TransactionDatabase:
                     "tolerance": tolerance,
                 },
             )
-
-    def close(self) -> None:
-        if self._engine is not None:
-            self._engine.dispose()
-            self._engine = None
 
 
 def draft_to_db_row(draft: ExtractedTransaction) -> dict[str, Any]:

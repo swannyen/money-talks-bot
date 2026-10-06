@@ -1,4 +1,4 @@
-"""Suggest tickers from holdings and recent transactions (for guided /add buttons)."""
+"""Suggest tickers from holdings and recent transactions (for /addsupport DIVIDEND)."""
 
 from __future__ import annotations
 

@@ -14,8 +14,6 @@ from src.parsers.prompts import INVESTMENT_EXTRACTION_SYSTEM, INVESTMENT_EXTRACT
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
-
 
 class VisionParserError(Exception):
     pass
